@@ -1,6 +1,8 @@
 package com.example.javid.camtest;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
@@ -11,12 +13,14 @@ import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.TotalCaptureResult;
+import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Size;
@@ -33,7 +37,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.sql.Array;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -50,10 +56,10 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    TextureView previewView = (TextureView) findViewById(R.id.preview);
+    TextureView previewView;
     String cameraId;
     CameraDevice cameraDevice;
-    CameraCaptureSession cameraCaptureSession;
+    CameraCaptureSession cameraCaptureSessions;
     CaptureRequest.Builder captureRequestBuilder;
     Size imageDimension;
     ImageReader imageReader;
@@ -62,32 +68,35 @@ public class MainActivity extends AppCompatActivity {
     Handler mBackgroundHandler;
     HandlerThread mBackgroundHandlerThread;
 
+    CameraDevice.StateCallback stateCallback = new CameraDevice.StateCallback() {
+        @Override
+        public void onOpened(@NonNull CameraDevice camera) {
+            cameraDevice = cameraDevice;
+            createCameraPreview();
+        }
+
+        @Override
+        public void onDisconnected(@NonNull CameraDevice cameraDevice) {
+            cameraDevice.close();
+
+        }
+
+        @Override
+        public void onError(@NonNull CameraDevice cameraDevice, int i) {
+            cameraDevice.close();
+            cameraDevice = null;
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        previewView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
-            @Override
-            public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int i, int i1) {
-                openCamera();
-            }
+        previewView = (TextureView) findViewById(R.id.preview);
+        assert previewView != null;
 
-            @Override
-            public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int i, int i1) {
-
-            }
-
-            @Override
-            public boolean onSurfaceTextureDestroyed(SurfaceTexture surfaceTexture) {
-                return false;
-            }
-
-            @Override
-            public void onSurfaceTextureUpdated(SurfaceTexture surfaceTexture) {
-
-            }
-        });
+        previewView.setSurfaceTextureListener(textureListener);
         Button btn = (Button) findViewById(R.id.btnTake);
         btn.setOnClickListener(new View.OnClickListener() {
 
@@ -217,14 +226,151 @@ public class MainActivity extends AppCompatActivity {
             Surface surface = new Surface(texture);
             captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             captureRequestBuilder.addTarget(surface);
+
+            cameraDevice.createCaptureSession(Arrays.asList(surface), new CameraCaptureSession.StateCallback() {
+                @Override
+                public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
+                    if (cameraDevice == null)
+                        return;
+                    cameraCaptureSessions = cameraCaptureSession;
+
+                    updatePreview();
+
+
+                }
+
+                @Override
+                public void onConfigureFailed(@NonNull CameraCaptureSession cameraCaptureSession) {
+                    Toast.makeText(MainActivity.this, "Changed", Toast.LENGTH_SHORT);
+
+                }
+            }, null);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
     }
 
+    private void updatePreview() {
+        if (cameraDevice == null)
+            Toast.makeText(MainActivity.this, "Error in Preview", Toast.LENGTH_LONG);
 
-    private void openCamera() {
+        captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
+
+        try {
+            cameraCaptureSessions.setRepeatingRequest(captureRequestBuilder.build(), null, mBackgroundHandler);
+
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
     }
 
+
+    private void openCamera() {
+        CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+        try {
+            cameraId = manager.getCameraIdList()[0];
+            CameraCharacteristics chars = manager.getCameraCharacteristics(cameraId);
+            StreamConfigurationMap map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+
+            assert map != null;
+
+            imageDimension = map.getOutputSizes(SurfaceTexture.class)[0];
+
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{
+                        Manifest.permission.CAMERA,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE
+                }, REQUEST_CAMERA_PERMISSION);
+
+                return;
+            }
+
+            manager.openCamera(cameraId, stateCallback, null);
+
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+
+
+        }
+
+
+    }
+
+    TextureView.SurfaceTextureListener textureListener = new TextureView.SurfaceTextureListener() {
+        @Override
+        public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int i, int i1) {
+            openCamera();
+        }
+
+        @Override
+        public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int i, int i1) {
+
+        }
+
+        @Override
+        public boolean onSurfaceTextureDestroyed(SurfaceTexture surfaceTexture) {
+            return false;
+        }
+
+        @Override
+        public void onSurfaceTextureUpdated(SurfaceTexture surfaceTexture) {
+
+        }
+    };
+
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        if (requestCode == REQUEST_CAMERA_PERMISSION) {
+            if (grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Your can use Camera without permission", Toast.LENGTH_SHORT).show();
+                finish();
+            }
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        startBackgroundThreat();
+
+        if (previewView.isAvailable())
+            openCamera();
+        else
+            previewView.setSurfaceTextureListener(textureListener);
+    }
+
+    @Override
+    protected void onPause() {
+        stopBackgroundThread();
+        super.onPause();
+    }
+
+    private void stopBackgroundThread() {
+        mBackgroundHandlerThread.quitSafely();
+        try {
+            mBackgroundHandlerThread.join();
+            mBackgroundHandlerThread = null;
+            mBackgroundHandler = null;
+
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+
+        }
+    }
+
+    private void startBackgroundThreat() {
+
+        mBackgroundHandlerThread = new HandlerThread("Camera Background");
+        mBackgroundHandlerThread.start();
+        mBackgroundHandler = new Handler(mBackgroundHandlerThread.getLooper());
+
+
+    }
 
 }
