@@ -103,6 +103,8 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onClick(View view) {
+                Toast.makeText(MainActivity.this,"Taking pic",Toast.LENGTH_SHORT).show();
+                //oast.makeText(this, "Your can use Camera without permission", Toast.LENGTH_SHORT).show();
                 takePicture();
             }
         });
@@ -268,6 +270,7 @@ public class MainActivity extends AppCompatActivity {
 
 
     private void openCamera() {
+        Toast.makeText(MainActivity.this,"Opening the Cam",Toast.LENGTH_SHORT).show();
         CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         try {
             cameraId = manager.getCameraIdList()[0];
@@ -291,6 +294,8 @@ public class MainActivity extends AppCompatActivity {
 
 
         } catch (Exception ex) {
+
+            Toast.makeText(MainActivity.this,ex.toString(),Toast.LENGTH_SHORT).show();
             ex.printStackTrace();
 
 
@@ -302,6 +307,7 @@ public class MainActivity extends AppCompatActivity {
     TextureView.SurfaceTextureListener textureListener = new TextureView.SurfaceTextureListener() {
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int i, int i1) {
+
             openCamera();
         }
 
