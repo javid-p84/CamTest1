@@ -71,7 +71,7 @@ public class MainActivity extends AppCompatActivity {
     CameraDevice.StateCallback stateCallback = new CameraDevice.StateCallback() {
         @Override
         public void onOpened(@NonNull CameraDevice camera) {
-            cameraDevice = cameraDevice;
+            cameraDevice = camera;
             createCameraPreview();
         }
 
@@ -121,7 +121,7 @@ public class MainActivity extends AppCompatActivity {
             Size[] jpgSizes = null;
 
             if (chars != null)
-                jpgSizes = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP).getOutputSizes(ImageFormat.JPEG);
+                jpgSizes = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP).getOutputSizes(ImageFormat.RAW_SENSOR);
 
             int width = 640;
             int height = 480;
@@ -130,7 +130,7 @@ public class MainActivity extends AppCompatActivity {
                 height = jpgSizes[0].getHeight();
             }
 
-            final ImageReader reader = ImageReader.newInstance(width, height, ImageFormat.JPEG, 1);
+            final ImageReader reader = ImageReader.newInstance(width, height, ImageFormat.RAW_SENSOR, 2);
 
             List<Surface> outputSurfaces = new ArrayList<>(2);
 
@@ -145,16 +145,26 @@ public class MainActivity extends AppCompatActivity {
             int rotation = getWindowManager().getDefaultDisplay().getRotation();
 
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
-            file = new File(Environment.getExternalStorageDirectory() + UUID.randomUUID().toString());
+            file = new File(Environment.getExternalStorageDirectory()+"/" + UUID.randomUUID().toString());
+            //Toast.makeText(MainActivity.this,"decided on file name " + file, Toast.LENGTH_SHORT).show();
+
             ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
                 @Override
                 public void onImageAvailable(ImageReader imageReader) {
                     Image image = null;
+                    ByteBuffer buffer=null;
                     try {
+                        Toast.makeText(MainActivity.this,"img available", Toast.LENGTH_SHORT).show();
+
                         image = reader.acquireLatestImage();
-                        ByteBuffer buffer = image.getPlanes()[0].getBuffer();
+                        buffer= image.getPlanes()[0].getBuffer();
                         byte[] bytes = new byte[buffer.capacity()];
+                        buffer.rewind();
+
                         buffer.get(bytes);
+
+                        Toast.makeText(MainActivity.this,"gonna save", Toast.LENGTH_SHORT).show();
+
                         save(bytes);
 
 
@@ -162,8 +172,9 @@ public class MainActivity extends AppCompatActivity {
                         ex.printStackTrace();
                     } finally {
                         if (image != null)
-                            image.close();
 
+                            image.close();
+                        buffer=null;
 
                     }
 
@@ -172,10 +183,17 @@ public class MainActivity extends AppCompatActivity {
                 private void save(byte[] bytes) throws Exception {
                     OutputStream outputStream = null;
                     try {
+                        Toast.makeText(MainActivity.this,"writing to file", Toast.LENGTH_SHORT).show();
 
                         outputStream = new FileOutputStream(file);
                         outputStream.write(bytes);
-                    } finally {
+                    }
+                    catch (Exception ex)
+                    {
+                        Toast.makeText(MainActivity.this,"Error on Save"+ex.toString(), Toast.LENGTH_SHORT).show();
+
+                    }
+                    finally {
                         if (outputStream != null)
                             outputStream.close();
                     }
@@ -189,6 +207,7 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
                     super.onCaptureCompleted(session, request, result);
+
                     Toast.makeText(MainActivity.this, "Saved " + file, Toast.LENGTH_SHORT).show();
                     createCameraPreview();
 
@@ -198,6 +217,8 @@ public class MainActivity extends AppCompatActivity {
             cameraDevice.createCaptureSession(outputSurfaces, new CameraCaptureSession.StateCallback() {
                 @Override
                 public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
+                    Toast.makeText(MainActivity.this,"configing capture", Toast.LENGTH_SHORT).show();
+
                     try {
                         cameraCaptureSession.capture(captureBuilder.build(), captureListener, mBackgroundHandler);
                     } catch (Exception ex) {
@@ -209,6 +230,7 @@ public class MainActivity extends AppCompatActivity {
 
                 @Override
                 public void onConfigureFailed(@NonNull CameraCaptureSession cameraCaptureSession) {
+                    Toast.makeText(MainActivity.this,"capture lister config faild", Toast.LENGTH_SHORT).show();
 
                 }
             }, mBackgroundHandler);
